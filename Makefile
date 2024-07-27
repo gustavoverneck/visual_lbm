@@ -7,7 +7,7 @@ TARGET = main
 OBJS = $(TARGET).o
 
 # SDL2 Libraries and Include Paths
-SDL_LIBS = -lSDL2
+SDL_LIBS = -lSDL2 -lSDL2_ttf
 
 # Build Rules
 all: $(TARGET)

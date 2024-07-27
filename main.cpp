@@ -5,49 +5,107 @@
 #include <fstream>
 #include <cmath>
 #include <tuple>
+#include <map>
 
-
-struct Cell {
-    double density;
-};
-
-class Button {
-    public:
-        const int width;
-        const int height;
-        const int x;
-        const int y;
-        std::tuple<int, int, int> color;
-    
-        bool isInside(int x, int y) {
-                return x > this->x && x < this->x + this->width && y > this->y && y < this->y + this->height;
-            }
-};
-
-
-// Canva parameters
-const int SCREEN_WIDTH = 800;
-const int SCREEN_HEIGHT = 600;
-const int GRID_SIZE = 50;
-const int CELL_SIZE = SCREEN_WIDTH / GRID_SIZE;
-
-
-std::vector<std::vector<Cell>> grid(GRID_SIZE, std::vector<Cell>(GRID_SIZE));
-std::vector<std::vector<bool>> obstacles(GRID_SIZE, std::vector<bool>(GRID_SIZE, false));
 
 // Buttons dimensions
 const int BUTTON_WIDTH = 150;
 const int BUTTON_HEIGHT = 50;
-const int BUTTON_X = SCREEN_WIDTH - BUTTON_WIDTH - 10;
-const int BUTTON_Y = SCREEN_HEIGHT - BUTTON_HEIGHT - 10;
 
+// Canva parameters
+constexpr int BORDER_SIZE = 20;
+constexpr int SCREEN_WIDTH = 800+BUTTON_WIDTH+BORDER_SIZE;
+constexpr int SCREEN_HEIGHT = 600+BORDER_SIZE;
+constexpr int GRID_SIZE = 50;
+constexpr int CELL_SIZE = SCREEN_WIDTH / GRID_SIZE;
+
+constexpr int width = BUTTON_WIDTH;
+constexpr int height = BUTTON_HEIGHT;
+
+// Colors parameters
+std::tuple<int, int, int> LINE_COLOR= {65, 65, 65};  // White color
+std::tuple<int, int, int> OBSTACLE_COLOR = {255, 0, 0}; // Red color
+std::tuple<int, int, int> INFLOW_COLOR = {0, 0, 255};    // Blue color
+std::tuple<int, int, int> PIPEWALL_COLOR = {0, 255, 0};   // Green color
+std::tuple<int, int, int> SAVEBUTTON_COLOR = {255, 255, 0}; // Yellow color
+std::tuple<int, int, int> TEXT_COLOR = {0, 0 ,0}; // Black
+std::tuple<int, int, int> EMPTYBUTTON_COLOR = {0, 0, 0}; // Grey
+
+
+// Font parameters
+const int FONT_SIZE = 24;
+const char* FONT_PATH = "static/SIXTY.TTF";
+
+
+
+
+// Data Structures
+struct ButtonParams {
+    int x;
+    int y;
+    int width;
+    int height;
+    std::string text;
+    std::tuple<int, int, int> color;
+    std::tuple<int, int, int> text_color;
+};
+
+class Button {
+    public:
+        int x;
+        int y;
+        int width;
+        int height;
+        std::string text;
+        std::tuple<int, int, int> color;
+        std::tuple<int, int, int> text_color = TEXT_COLOR;
+
+        Button(const ButtonParams& params) :
+            x(params.x),
+            y(params.y),
+            width(params.width),
+            height(params.height),
+            text(params.text),
+            color(params.color),
+            text_color(params.text_color)
+        {}
+    
+        bool isInside(int x, int y) {
+                return x > this->x && x < this->x + this->width && y > this->y && y < this->y + this->height;
+            }
+        
+        void drawButton(SDL_Renderer* renderer) {
+            SDL_SetRenderDrawColor(renderer, std::get<0>(this->color), std::get<1>(this->color), std::get<2>(this->color), SDL_ALPHA_OPAQUE);
+            SDL_Rect buttonRect = { this->x, this->y, this->width, this->height };
+            SDL_RenderFillRect(renderer, &buttonRect);
+            // Add text to the button using SDL_ttf
+        }
+        void drawButtonText(SDL_Renderer* renderer, TTF_Font* font) {
+            SDL_Color textColor = { std::get<0>(this->text_color), std::get<1>(this->text_color), std::get<2>(this->text_color) };
+            SDL_Surface* surfaceMessage = TTF_RenderText_Solid(font, this->text.c_str(), textColor);
+            SDL_Texture* message = SDL_CreateTextureFromSurface(renderer, surfaceMessage);
+
+            int textW = 0;
+            int textH = 0;
+            SDL_QueryTexture(message, NULL, NULL, &textW, &textH);
+            SDL_Rect textRect = { this->x + (this->width - textW) / 2, this->y + (this->height - textH) / 2, textW, textH };
+
+            SDL_RenderCopy(renderer, message, NULL, &textRect);
+            SDL_FreeSurface(surfaceMessage);
+            SDL_DestroyTexture(message);
+        }
+};
+
+
+std::vector<std::vector<bool>> obstacles(GRID_SIZE, std::vector<bool>(GRID_SIZE, false));
 std::vector<Button> buttons;    // Empty vector to store all buttons
 
+// Functions
 void drawGrid(SDL_Renderer* renderer) {
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+    SDL_SetRenderDrawColor(renderer, std::get<0>(LINE_COLOR), std::get<1>(LINE_COLOR), std::get<2>(LINE_COLOR), SDL_ALPHA_OPAQUE);
     for (int i = 0; i <= GRID_SIZE; ++i) {
-        SDL_RenderDrawLine(renderer, i * CELL_SIZE, 0, i * CELL_SIZE, SCREEN_HEIGHT);
-        SDL_RenderDrawLine(renderer, 0, i * CELL_SIZE, SCREEN_WIDTH, i * CELL_SIZE);
+        SDL_RenderDrawLine(renderer, i * CELL_SIZE, 0, i * CELL_SIZE, SCREEN_HEIGHT+BORDER_SIZE);
+        SDL_RenderDrawLine(renderer, 0, i * CELL_SIZE, SCREEN_WIDTH+BORDER_SIZE, i * CELL_SIZE);
     }
 }
 
@@ -63,8 +121,63 @@ void drawObstacles(SDL_Renderer* renderer) {
     }
 }
 
+void createButtons(SDL_Renderer* renderer, std::vector<Button>& buttons){
+    // Create a button to save the state
+    buttons.push_back(Button({
+    .x = SCREEN_WIDTH - BUTTON_WIDTH, 
+    .y = 0,
+    .width = BUTTON_WIDTH,
+    .height = BUTTON_HEIGHT,
+    .text = "Save",
+    .color = SAVEBUTTON_COLOR,
+    .text_color = TEXT_COLOR
+    }));
+
+    // Create a button to draw walls
+    buttons.push_back(Button({
+        .x = SCREEN_WIDTH - BUTTON_WIDTH,
+        .y = BUTTON_HEIGHT, .width = BUTTON_WIDTH,
+        .height = BUTTON_HEIGHT,
+        .text = "Wall",
+        .color = PIPEWALL_COLOR,
+        .text_color = TEXT_COLOR                 
+    }));
+
+    // Create a button to draw obstacles
+    buttons.push_back(Button({
+        .x = SCREEN_WIDTH - BUTTON_WIDTH,
+        .y = 2*BUTTON_HEIGHT, .width = BUTTON_WIDTH,
+        .height = BUTTON_HEIGHT,
+        .text = "+obst",
+        .color = OBSTACLE_COLOR,
+        .text_color = TEXT_COLOR
+    }));
+
+    // Create a button to draw inflow
+    buttons.push_back(Button({
+        .x = SCREEN_WIDTH - BUTTON_WIDTH,
+        .y = 3*BUTTON_HEIGHT,
+        .width = BUTTON_WIDTH,
+        .height = BUTTON_HEIGHT,
+        .text = "Inflow",
+        .color = INFLOW_COLOR,
+        .text_color = TEXT_COLOR
+    }));
+
+    // Create a button to draw empty space (eraser)
+    buttons.push_back(Button({
+        .x = SCREEN_WIDTH - BUTTON_WIDTH,
+        .y = 4*BUTTON_HEIGHT,
+        .width = BUTTON_WIDTH,
+        .height = BUTTON_HEIGHT,
+        .text = "+empty",
+        .color = EMPTYBUTTON_COLOR,
+        .text_color = {255, 255, 255}
+    }));
+}
+
 void saveState() {
-    std::ofstream outFile("obstacles.txt");
+    std::ofstream outFile("state.txt");
     if (outFile.is_open()) {
         for (int i = 0; i < GRID_SIZE; ++i) {
             for (int j = 0; j < GRID_SIZE; ++j) {
@@ -73,23 +186,13 @@ void saveState() {
             outFile << "\n";
         }
         outFile.close();
-        std::cout << "State saved to obstacles.txt" << std::endl;
+        std::cout << "State saved to state.txt" << std::endl;
     }
 }
 
-void drawButton(SDL_Renderer* renderer) {
-    SDL_SetRenderDrawColor(renderer, 0, 255, 0, SDL_ALPHA_OPAQUE);
-    SDL_Rect buttonRect = { BUTTON_X, BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT };
-    SDL_RenderFillRect(renderer, &buttonRect);
-
-    // Add text to the button using SDL_ttf
-}
-
-bool isInsideButton(int x, int y) {
-    return x > BUTTON_X && x < BUTTON_X + BUTTON_WIDTH && y > BUTTON_Y && y < BUTTON_Y + BUTTON_HEIGHT;
-}
 
 
+// Main function
 int main(int argc, char* args[]) {
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << std::endl;
@@ -113,15 +216,17 @@ int main(int argc, char* args[]) {
         return -1;
     }
 
-    TTF_Font* font = TTF_OpenFont("static/sixty_font.ttf", 24); // Font size 24
+    TTF_Font* font = TTF_OpenFont(FONT_PATH, FONT_SIZE); // Font size 24
     if (!font) {
         std::cerr << "Failed to load font! TTF_Error: " << TTF_GetError() << std::endl;
         return -1;
     }
 
+    createButtons(renderer, buttons);
+
     bool quit = false;
     SDL_Event e;
-
+    int action = 0;
     while (!quit) {
         while (SDL_PollEvent(&e) != 0) {
             if (e.type == SDL_QUIT) {
@@ -129,23 +234,45 @@ int main(int argc, char* args[]) {
             } else if (e.type == SDL_MOUSEBUTTONDOWN) {
                 int x, y;
                 SDL_GetMouseState(&x, &y);
-                if (isInsideButton(x, y)) {
-                    saveState();
-                    quit = true;
-                } else {
-                    int gridX = x / CELL_SIZE;
-                    int gridY = y / CELL_SIZE;
-                    obstacles[gridX][gridY] = !obstacles[gridX][gridY]; // Toggle obstacle
+                for (Button b : buttons){
+                    if (b.isInside(x, y)){
+                        if (b.text == "Save"){
+                            action = 9;
+                            saveState();
+                        }
+                        else if (b.text == "Wall"){
+                            action = 1;
+                        }
+                        else if (b.text == "+obst"){
+                            action = 2;
+                        }
+                        else if (b.text == "Inflow"){
+                            action = 3;
+                        }
+                        else{
+                            action = 0;
+                        }
+                    }
+                    else {
+                        int gridX = x / CELL_SIZE;
+                        int gridY = y / CELL_SIZE;
+                        obstacles[gridX][gridY] = action; // Toggle obstacle
+                }
+
                 }
             }
         }
 
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
         SDL_RenderClear(renderer);
-
         drawGrid(renderer);
         drawObstacles(renderer);
-        drawButton(renderer);
+
+        for (Button& b : buttons) {
+            b.drawButton(renderer);
+            b.drawButtonText(renderer, font); // Render button text
+        }
+
 
         SDL_RenderPresent(renderer);
     }
