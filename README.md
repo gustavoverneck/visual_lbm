@@ -1,2 +1,2 @@
 # visual_lbm
-2D LBm grid visualisation software
+2D LBM grid visualisation software
