@@ -81,7 +81,8 @@ void drawButton(SDL_Renderer* renderer) {
     SDL_SetRenderDrawColor(renderer, 0, 255, 0, SDL_ALPHA_OPAQUE);
     SDL_Rect buttonRect = { BUTTON_X, BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT };
     SDL_RenderFillRect(renderer, &buttonRect);
-    // Add text to the button using SDL_ttf if desired (not shown here for simplicity)
+
+    // Add text to the button using SDL_ttf
 }
 
 bool isInsideButton(int x, int y) {
@@ -109,6 +110,12 @@ int main(int argc, char* args[]) {
 
     if (TTF_Init() == -1) {
         std::cerr << "SDL_ttf could not initialize! TTF_Error: " << TTF_GetError() << std::endl;
+        return -1;
+    }
+
+    TTF_Font* font = TTF_OpenFont("static/sixty_font.ttf", 24); // Font size 24
+    if (!font) {
+        std::cerr << "Failed to load font! TTF_Error: " << TTF_GetError() << std::endl;
         return -1;
     }
 
@@ -142,7 +149,9 @@ int main(int argc, char* args[]) {
 
         SDL_RenderPresent(renderer);
     }
-
+    
+    TTF_CloseFont(font);
+    TTF_Quit(); // Quit SDL_ttf
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
