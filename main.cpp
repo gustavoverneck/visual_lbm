@@ -6,6 +6,9 @@
 #include <cmath>
 #include <tuple>
 #include <map>
+#include <experimental/filesystem>
+
+namespace fs = std::experimental::filesystem;
 
 
 // Buttons dimensions
@@ -13,11 +16,13 @@ const int BUTTON_WIDTH = 150;
 const int BUTTON_HEIGHT = 50;
 
 // Canva parameters
-constexpr int BORDER_SIZE = 20;
-constexpr int SCREEN_WIDTH = 800+BUTTON_WIDTH+BORDER_SIZE;
-constexpr int SCREEN_HEIGHT = 600+BORDER_SIZE;
+constexpr int SCREEN_WIDTH = 800+BUTTON_WIDTH;
+constexpr int SCREEN_HEIGHT = 800;
+constexpr int GRID_HEIGHT = SCREEN_HEIGHT;
+constexpr int GRID_WIDTH = SCREEN_WIDTH-BUTTON_WIDTH;
+
 constexpr int GRID_SIZE = 50;
-constexpr int CELL_SIZE = SCREEN_WIDTH / GRID_SIZE;
+constexpr int CELL_SIZE = GRID_WIDTH / GRID_SIZE;
 
 constexpr int width = BUTTON_WIDTH;
 constexpr int height = BUTTON_HEIGHT;
@@ -31,12 +36,9 @@ std::tuple<int, int, int> SAVEBUTTON_COLOR = {255, 255, 0}; // Yellow color
 std::tuple<int, int, int> TEXT_COLOR = {0, 0 ,0}; // Black
 std::tuple<int, int, int> EMPTYBUTTON_COLOR = {0, 0, 0}; // Grey
 
-
 // Font parameters
 const int FONT_SIZE = 24;
 const char* FONT_PATH = "static/SIXTY.TTF";
-
-
 
 
 // Data Structures
@@ -97,26 +99,38 @@ class Button {
 };
 
 
-std::vector<std::vector<bool>> obstacles(GRID_SIZE, std::vector<bool>(GRID_SIZE, false));
+std::vector<std::vector<int>> obstacles(GRID_SIZE, std::vector<int>(GRID_SIZE, 0));
 std::vector<Button> buttons;    // Empty vector to store all buttons
 
 // Functions
 void drawGrid(SDL_Renderer* renderer) {
     SDL_SetRenderDrawColor(renderer, std::get<0>(LINE_COLOR), std::get<1>(LINE_COLOR), std::get<2>(LINE_COLOR), SDL_ALPHA_OPAQUE);
     for (int i = 0; i <= GRID_SIZE; ++i) {
-        SDL_RenderDrawLine(renderer, i * CELL_SIZE, 0, i * CELL_SIZE, SCREEN_HEIGHT+BORDER_SIZE);
-        SDL_RenderDrawLine(renderer, 0, i * CELL_SIZE, SCREEN_WIDTH+BORDER_SIZE, i * CELL_SIZE);
+        SDL_RenderDrawLine(renderer, i * CELL_SIZE, 0, i * CELL_SIZE, GRID_HEIGHT);
+        SDL_RenderDrawLine(renderer, 0, i * CELL_SIZE, GRID_WIDTH, i * CELL_SIZE);
     }
 }
 
-void drawObstacles(SDL_Renderer* renderer) {
-    SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
+void drawCells(SDL_Renderer* renderer) {
     for (int i = 0; i < GRID_SIZE; ++i) {
         for (int j = 0; j < GRID_SIZE; ++j) {
-            if (obstacles[i][j]) {
-                SDL_Rect fillRect = { i * CELL_SIZE, j * CELL_SIZE, CELL_SIZE, CELL_SIZE };
-                SDL_RenderFillRect(renderer, &fillRect);
+            if (obstacles[i][j] == 0) { // Empty
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
             }
+            else if (obstacles[i][j] == 1) { // Obstacle
+                SDL_SetRenderDrawColor(renderer, 255, 0, 0, SDL_ALPHA_OPAQUE);
+            }
+            else if (obstacles[i][j] == 2) { // Wall
+                SDL_SetRenderDrawColor(renderer, 0, 255, 0, SDL_ALPHA_OPAQUE);
+            }
+            else if (obstacles[i][j] == 3) { // Inflow
+                SDL_SetRenderDrawColor(renderer, 0, 0, 255, SDL_ALPHA_OPAQUE);
+            }
+            else {
+                SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+            }
+            SDL_Rect fillRect = { i * CELL_SIZE, j * CELL_SIZE, CELL_SIZE, CELL_SIZE };
+            SDL_RenderFillRect(renderer, &fillRect);
         }
     }
 }
@@ -194,6 +208,19 @@ void saveState() {
 
 // Main function
 int main(int argc, char* args[]) {
+    fs::path outputDirectoryPath = "output"; // Path to your output directory
+    try {
+        if (!fs::exists(outputDirectoryPath)) {
+            fs::create_directory(outputDirectoryPath);
+            std::cout << "Output directory created successfully." << std::endl;
+        } else {
+            std::cout << "Output directory already exists." << std::endl;
+        }
+    } catch (const fs::filesystem_error& e) {
+        std::cerr << "Error creating output directory: " << e.what() << std::endl;
+    }
+
+    
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << std::endl;
         return -1;
@@ -234,39 +261,53 @@ int main(int argc, char* args[]) {
             } else if (e.type == SDL_MOUSEBUTTONDOWN) {
                 int x, y;
                 SDL_GetMouseState(&x, &y);
+                bool insideButton = false;
                 for (Button b : buttons){
                     if (b.isInside(x, y)){
                         if (b.text == "Save"){
-                            action = 9;
+                            action = 0;
                             saveState();
+                            insideButton = true;
+                            std::cout << "Action updated: " << action << "\n";
+                            break;
                         }
                         else if (b.text == "Wall"){
-                            action = 1;
-                        }
-                        else if (b.text == "+obst"){
                             action = 2;
+                            insideButton = true;
+                            std::cout << "Action: " << action << "\n";
+                            break;                        }
+                        else if (b.text == "+obst"){
+                            action = 1;
+                            insideButton = true;
+                            std::cout << "Action updated: " << action << "\n";
+                            break; 
                         }
                         else if (b.text == "Inflow"){
                             action = 3;
+                            insideButton = true;
+                            std::cout << "Action updated: " << action << "\n";
+                            break;
                         }
                         else{
                             action = 0;
+                            insideButton = true;
+                            std::cout << "Action updated: " << action << "\n";
+                            break; 
                         }
                     }
-                    else {
-                        int gridX = x / CELL_SIZE;
-                        int gridY = y / CELL_SIZE;
-                        obstacles[gridX][gridY] = action; // Toggle obstacle
                 }
-
+                if (!insideButton) {
+                    int gridX = x / CELL_SIZE;
+                    int gridY = y / CELL_SIZE;
+                    obstacles[gridX][gridY] = action; // Toggle obstacle
                 }
             }
         }
 
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
         SDL_RenderClear(renderer);
+        drawCells(renderer);
         drawGrid(renderer);
-        drawObstacles(renderer);
 
         for (Button& b : buttons) {
             b.drawButton(renderer);
