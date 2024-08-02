@@ -5,7 +5,6 @@
 #include <fstream>
 #include <cmath>
 #include <tuple>
-#include <map>
 #include <experimental/filesystem>
 
 namespace fs = std::experimental::filesystem;
@@ -191,7 +190,7 @@ void createButtons(SDL_Renderer* renderer, std::vector<Button>& buttons){
 }
 
 void saveState() {
-    std::ofstream outFile("state.txt");
+    std::ofstream outFile("output/state.txt");
     if (outFile.is_open()) {
         for (int i = 0; i < GRID_SIZE; ++i) {
             for (int j = 0; j < GRID_SIZE; ++j) {
@@ -200,7 +199,7 @@ void saveState() {
             outFile << "\n";
         }
         outFile.close();
-        std::cout << "State saved to state.txt" << std::endl;
+        std::cout << "State saved to ./output/state.txt" << std::endl;
     }
 }
 
